@@ -1,3 +1,4 @@
+import sys
 import json
 import warnings
 from typing import Any
@@ -8,6 +9,9 @@ from math import *
 from manim import *
 # Just allow eval() to access
 import numpy as np
+
+
+CENTER = np.array([0, 0, 0])
     
 
 class MObjectManager:
@@ -31,6 +35,13 @@ class MObjectManager:
             o.scale(eval(v))
 
     @staticmethod
+    def _mobject_rotate(_: 'MObjectManager', o: Mobject, v: float | int | str, __: str) -> None:
+        if isinstance(v, (int, float)):
+            o.rotate(v)
+        else:
+            o.rotate(eval(v))
+
+    @staticmethod
     def _mobject_move_to(m: 'MObjectManager', o: Mobject, d: str, _: str) -> None:
         o.move_to(m.get_object(d))
 
@@ -38,8 +49,14 @@ class MObjectManager:
     def _mobject_associate(m: 'MObjectManager', o: Mobject, f: str, _: str) -> None:
         o.add_updater(eval(f'lambda this: {f}'))
 
+    @staticmethod
+    def _mobject_associate_value(m: 'MObjectManager', o: Mobject, f: str, _: str) -> None:
+        expr = f'this.set_value(this.find(\"{f.split(".")[0]}\").{"".join(f.split(".")[1:])})'
+        sys.stderr.write(expr)
+        o.add_updater(eval(f'lambda this: {expr}'))
+
     supported_attributes = {}
-    value_optional_types = ('circle', "axes")
+    value_optional_types = ('circle', 'axes', 'triangle', 'arrow', 'stealthTip', 'line')
 
     def __init__(self) -> None:
         self._objects: list[str] = []
@@ -85,7 +102,10 @@ class MObjectManager:
                                 real_val = getattr(self, v.lstrip('$'))
                             elif v.startswith('%'):
                                 allow_access = len(v.split('.')) > 1
-                                real_val = eval(f'{"self." if allow_access else ""}{v[1:]}')
+                                try:
+                                    real_val = eval(f'{"self." if allow_access else ""}{v[1:]}')
+                                except:
+                                    real_val = eval(v[1:])
                     else:
                         real_val = None
 
@@ -95,7 +115,15 @@ class MObjectManager:
 
                     for k, v in properties.items():
                         if isinstance(v, str) and v.startswith('%'):
-                            updates[k] = eval(v[1:])
+                            allow_access = len(v.split('.')) > 1
+                            try:
+                                updates[k] = eval(f'{"self." if allow_access else ""}{v[1:]}')
+                            except:
+                                updates[k] = eval(v[1:])
+
+                        elif isinstance(v, str) and v.startswith('$'):
+                            updates[k] = self, v.lstrip('$')
+
                     for k, v in updates.items():
                         properties[k] = v
 
@@ -103,7 +131,7 @@ class MObjectManager:
                     if len(value['type'].split('.')) > 1:
                         allow_access = True
 
-                    print(real_val, properties)
+                    sys.stderr.write(f'创建 Manim 对象：`{real_val}`, 参数: {properties}\n')
                     if real_val is not None:
                         val = eval(f'{"self." if allow_access else ""}{value["type"][0].upper() if not allow_access else value["type"][0]}{value["type"][1:]}')(real_val, **properties)
                     else:
@@ -233,7 +261,8 @@ class Director:
 
     # execution write support 0 positional argument and 0 property
     basic_property = { 'duration': 'run_time' }
-    animation_controller_mapping = [AnimationGroup, Succession, LaggedStart]
+    animation_controller_mapping = [AnimationGroup, None, LaggedStart]
+    # Controller 'Succession' deprecated
 
     @dataclass
     class AnimationWithPlayArguments:
@@ -253,7 +282,7 @@ class Director:
          'scale': ('scale', 1, {}),
          'shift': ('shift', 1, {}),
          'parallel': (0, 1, {}),
-         'succession': (1, -1, {}),
+         # 'succession': (1, -1, {}),
          'lagged': (2, -1, { 'ratio': 'lag_ratio' }),
          'wait': (-1, 1, {}),
          'select': (-2, -1, { 'action': 'action' }),
@@ -421,9 +450,12 @@ class Director:
                         raise Director.ExecutionException('Animation controller needs an animated sequence as paramater')
                     animation_controller = Director.animation_controller_mapping[action_object]
 
+                    controller_params = {} if 'properties' not in action else {
+                        action_kwargs[k]: v for k, v in action['properties'].items()
+                    }
                     result.append(Director.AnimationWithPlayArguments(animation_controller(
                         *[a.animation for a in self.generate_action_sequence(action['params'])],
-                        **({} if 'properties' not in action else action['properties'])
+                        **controller_params
                     ), cfg, None, []))
 
             elif isinstance(action_object, str):
@@ -570,7 +602,7 @@ class Director:
                             for i in timeline:
                                 nodes.append(ApplyFunction(_method, i.related))
 
-                        print(nodes)
+                        sys.stderr.write(f'渲染动画序列：{nodes}\n')
                         self.target.play(animation_controller(
                             *nodes,
                             **controller_params

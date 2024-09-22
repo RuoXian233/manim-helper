@@ -30,18 +30,27 @@ class {}(Scene):
     
 if __name__ == '__main__':
     if len(sys.argv) != 4:
-        sys.stderr.write(f'Usage: ./{sys.argv[0]} <scene> <script-file> <actions-file>')
+        sys.stderr.write(f'Usage: ./{sys.argv[0]} <scene> <script-file> <actions-file>\n')
+        exit(1)
 
     __scene_name__ = sys.argv[1]
     script = sys.argv[2]
     actions = sys.argv[3]
 
-    filename = f'{uuid.uuid1()}__cache.py'
+    print(f'manim-helper: \n  渲染工程： {__scene_name__}, 脚本文件： {script}, 动画序列： {actions}')
+
+    # filename = f'{uuid.uuid1()}__cache.py'
+    filename = __scene_name__ + '.py'
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(sample.format(
             time.strftime('%y-%m-%d_%H-%M-%S', time.localtime(time.time())),
             __scene_name__, script, actions
         ))
 
-    os.system(f'manim -p "{filename}" {__scene_name__}')
-    os.remove(filename)
+    st = time.time()
+    if sys.platform == 'linux':
+        os.system(f'manim -p "{filename}" {__scene_name__} > /dev/null')
+    else:
+        os.system(f'manim -p "{filename}" {__scene_name__}')
+    # os.remove(filename)
+    print(f'工程： {__scene_name__} 渲染完毕，总用时：{round(time.time() - st, 8)} secs')
