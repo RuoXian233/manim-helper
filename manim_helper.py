@@ -55,8 +55,13 @@ class MObjectManager:
         sys.stderr.write(expr)
         o.add_updater(eval(f'lambda this: {expr}'))
 
+    @staticmethod
+    def _mobject_add_coord(m: 'MObjectManager', o: Axes, f: str, _: str) -> None:
+        if f:
+            o.add_coordinates()
+
     supported_attributes = {}
-    value_optional_types = ('circle', 'axes', 'triangle', 'arrow', 'stealthTip', 'line')
+    value_optional_types = ('circle', 'axes', 'triangle', 'arrow', 'stealthTip', 'line', 'numberPlane')
 
     def __init__(self) -> None:
         self._objects: list[str] = []
@@ -278,6 +283,7 @@ class Director:
          'create': (Create, 0, {}),
          'uncreate': (Uncreate, 0, {}),
          'transform': (ReplacementTransform, 1, {}),
+         'fadeout': (FadeOut, 0, {}),
          'translate': ('shift', 1, {}),
          'scale': ('scale', 1, {}),
          'shift': ('shift', 1, {}),
